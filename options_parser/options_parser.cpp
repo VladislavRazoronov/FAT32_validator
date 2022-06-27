@@ -10,10 +10,8 @@ namespace po = boost::program_options;
 command_line_options_t::command_line_options_t() {
     opt_conf.add_options()
         ("help,h",
-                "Show help message")
-        ("A_flag,A",
-                "All invisible characters, except for whitespaces, "
-                "should be displayed as their hexadecimal codes")
+         "This program is used for validating FAT32 image files,"
+         " usage FAT32_validator.exe path/to/image.img")
         ;
 }
 
@@ -32,7 +30,6 @@ void command_line_options_t::parse(int ac, char **av) {
             std::cout << opt_conf << "\n";
             exit(EXIT_SUCCESS);
         }
-        A_flag = var_map.count("A_flag");
         po::notify(var_map);
     } catch (std::exception &ex) {
         throw OptionsParseException(ex.what()); // Convert to our error type
