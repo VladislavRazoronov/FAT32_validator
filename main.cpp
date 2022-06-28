@@ -5,75 +5,81 @@
 #include <fstream>
 #include "options_parser.h"
 
-typedef struct fat_extBS_32
-{
-    //extended fat32 stuff
-    unsigned int		table_size_32;
-    unsigned short		extended_flags;
-    unsigned short		fat_version;
-    unsigned int		root_cluster;
-    unsigned short		fat_info;
-    unsigned short		backup_BS_sector;
-    unsigned char 		reserved_0[12];
-    unsigned char		drive_number;
-    unsigned char 		reserved_1;
-    unsigned char		boot_signature;
-    unsigned int 		volume_id;
-    unsigned char		volume_label[11];
-    unsigned char		fat_type_label[8];
+typedef struct {
+    unsigned char jmp[3];
+    char oem[8];
+    unsigned short sector_size;
+    unsigned char sectors_per_cluster;
+    unsigned short reserved_sectors;
+    unsigned char number_of_fats;
+    unsigned short root_dir_entries;
+    unsigned short total_sectors_short; // if zero, later field is used
+    unsigned char media_descriptor;
+    unsigned short fat_size_sectors;
+    unsigned short sectors_per_track;
+    unsigned short number_of_heads;
+    unsigned long hidden_sectors;
+    unsigned long total_sectors_long;
+    unsigned long logical_sectors;
+    unsigned short drive_description;
+    unsigned short version;
+    unsigned long root_dir_start;
+    unsigned short information_sector;
+    unsigned short backup_boot_sector;
+    unsigned char reserved[12];
 
-    friend std::istream & operator >>(std::istream & in, fat_extBS_32 & p) {
-        unsigned int		table_size_32;
-        unsigned short		extended_flags;
-        unsigned short		fat_version;
-        unsigned int		root_cluster;
-        unsigned short		fat_info;
-        unsigned short		backup_BS_sector;
-        unsigned char 		reserved_0[12];
-        unsigned char		drive_number;
-        unsigned char 		reserved_1;
-        unsigned char		boot_signature;
-        unsigned int 		volume_id;
-        unsigned char		volume_label[11];
-        unsigned char		fat_type_label[8];
-        in >> table_size_32 >> extended_flags >> fat_version
-        >> root_cluster >> fat_info >> backup_BS_sector >> reserved_0
-        >> drive_number >> reserved_1 >> boot_signature >> volume_id >>
-        volume_label >> fat_type_label;
-        p.table_size_32 = table_size_32;
-        p.extended_flags = extended_flags;
-        p.fat_version = fat_version;
-        p.root_cluster = root_cluster;
-        p.fat_info = fat_info;
-        p.backup_BS_sector = backup_BS_sector;
-        p.drive_number = drive_number;
-        p.reserved_1 = reserved_1;
-        p.boot_signature = boot_signature;
-        for(int i =0;i<12;i++ ){
-            p.reserved_0[i] = reserved_0[i];
-        }
-        for(int i =0;i<11;i++ ){
-            p.volume_label[i] = volume_label[i];
-        }
-        for(int i =0;i<8;i++ ){
-            p.fat_type_label[i] = fat_type_label[i];
-        }
+    unsigned char drive_number;
+    unsigned char current_head;
+    unsigned char boot_signature;
+    unsigned long volume_id;
+    char volume_label[11];
+    char fs_type[8];
+    char boot_code[422];
+    unsigned short boot_sector_signature;
+} __attribute((packed)) Fat32BootSector;
 
-        return in;
-    }
+typedef struct {
+    unsigned char first_byte;
+    unsigned char start_chs[3];
+    unsigned char partition_type;
+    unsigned char end_chs[3];
+    unsigned long start_sector;
+    unsigned long length_sectors;
+} __attribute((packed)) PartitionTable;
 
-}__attribute__((packed)) fat_extBS_32_t;
 
 int main(int argc, char* argv[]) {
+    if(argc < 2){
+        std::cout<<"File path not specified"<<std::endl;
+        return -1;
+    }
     command_line_options_t command_line_options{argc, argv};
     std::string filename = command_line_options.get_filenames()[0];
 
-    std::ifstream file(filename, std::ios::binary);
+    FILE *f = fopen(filename.c_str(),"rb");
+    if(f == nullptr){
+        std::cout<<strerror(errno)<<std::endl;
+        std::cout<<filename.c_str()<<" Invalid file"<<std::endl;
+    }
 
-    fat_extBS_32_t FAT_data;
+    PartitionTable pt[4];
+    int i;
+    fseek(f, 0x1BE, SEEK_SET);
+    fread(pt, sizeof(PartitionTable), 4, f);
 
-    file >> FAT_data;
-    std::cout<<FAT_data.backup_BS_sector<<std::endl;
+    for(i=0; i<4; i++) {
+        if(pt[i].partition_type == 12 || pt[i].partition_type == 13){
+            std::cout<<"FAT32 partition found"<<std::endl;
+            break;
+        }
+    }
 
+    std::cout<<pt[i].start_sector<<std::endl;
+    Fat32BootSector bs;
+    fseek(f, pt[i].start_sector, SEEK_SET);
+    fread(&bs, sizeof(Fat32BootSector), 1, f);
+
+    std::cout<<"Value: "<<bs.jmp<<std::endl;
+    fclose(f);
     return 0;
 }
