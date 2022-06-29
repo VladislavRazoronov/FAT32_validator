@@ -48,6 +48,26 @@ typedef struct {
 } __attribute((packed)) PartitionTable;
 
 
+int validate_FAT32_boot_sector(Fat32BootSector bs){
+    char name[5] = {'F','A','T','3','2'};
+    for(int i = 0; i < 5; i++){
+        if(bs.fs_type[i] != name[i]){
+            std::cout<<"Structure is not FAT32"<<std::endl;
+            return 0;
+        }
+    }
+    if(bs.sector_size > 4096 || bs.sector_size<128){
+        std::cout<<"Invalid sector size"<<std::endl;
+        return 0;
+    }
+    if((bs.sectors_per_cluster !=1 && bs.sectors_per_cluster%2 != 0) || bs.sectors_per_cluster>128){
+        std::cout<<"Invalid number of sectors per cluster"<<std::endl;
+        return 0;
+    }
+
+    return 1;
+}
+
 int main(int argc, char* argv[]) {
     if(argc < 2){
         std::cout<<"File path not specified"<<std::endl;
@@ -60,11 +80,40 @@ int main(int argc, char* argv[]) {
     if(f == nullptr){
         std::cout<<strerror(errno)<<std::endl;
         std::cout<<filename.c_str()<<" Invalid file"<<std::endl;
+        return -1;
     }
 
+
+    Fat32BootSector bs;
+    std::cout<<"Reading FAT32 boot sector from beginning of file..."<<std::endl;
+    fread(&bs, sizeof(Fat32BootSector), 1, f);
+
+    if(validate_FAT32_boot_sector(bs)){
+        std::cout<<"Valid FAT32 boot sector found"<<std::endl;
+        fclose(f);
+        return 0;
+    }
+
+    std::cout<<"Default boot sector invalid. Checking backup boot sector..."<<std::endl;
+    int backup = 6;
+    if(bs.backup_boot_sector >2 && bs.backup_boot_sector < bs.reserved_sectors)
+        backup = bs.backup_boot_sector;
+    int sector_size = 512;
+    if(bs.sector_size > 128 && bs.sector_size < 4096)
+        sector_size = bs.sector_size;
+    fseek(f,backup*sector_size,SEEK_SET);
+    fread(&bs, sizeof(Fat32BootSector), 1, f);
+
+    if(validate_FAT32_boot_sector(bs)){
+        std::cout<<"Valid FAT32 backup boot sector found"<<std::endl;
+        fclose(f);
+        return 0;
+    }
+
+    std::cout<<"FAT32 not found, checking if FAT32 partition exists..."<<std::endl;
     PartitionTable pt[4];
     int i;
-    fseek(f, 0x1BE, SEEK_SET);
+    fseek(f, 0xBE, SEEK_SET);
     fread(pt, sizeof(PartitionTable), 4, f);
 
     for(i=0; i<4; i++) {
@@ -73,13 +122,20 @@ int main(int argc, char* argv[]) {
             break;
         }
     }
+    if(i==4){
+        std::cout<<"No FAT32 partition found"<<std::endl;
+        return -1;
+    }
 
-    std::cout<<pt[i].start_sector<<std::endl;
-    Fat32BootSector bs;
     fseek(f, pt[i].start_sector, SEEK_SET);
     fread(&bs, sizeof(Fat32BootSector), 1, f);
 
-    std::cout<<"Value: "<<bs.jmp<<std::endl;
+    if(validate_FAT32_boot_sector(bs)){
+        std::cout<<"Valid FAT32 backup boot sector found"<<std::endl;
+        fclose(f);
+        return 0;
+    }
+    std::cout<<"File is invalid FAT32 disk image"<<std::endl;
     fclose(f);
-    return 0;
+    return -1;
 }
