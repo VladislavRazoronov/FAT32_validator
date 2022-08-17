@@ -20,7 +20,7 @@ typedef struct {
     unsigned short number_of_heads;
     unsigned long hidden_sectors;
     unsigned long total_sectors_long;
-    unsigned long logical_sectors;
+    unsigned long logical_sectors_per_fat;
     unsigned short drive_description;
     unsigned short version;
     unsigned long root_dir_start;
@@ -62,6 +62,14 @@ int validate_FAT32_boot_sector(Fat32BootSector bs){
     }
     if((bs.sectors_per_cluster !=1 && bs.sectors_per_cluster%2 != 0) || bs.sectors_per_cluster>128){
         std::cout<<"Invalid number of sectors per cluster"<<std::endl;
+        return 0;
+    }
+    if(bs.hidden_sectors > 100 || bs.hidden_sectors>bs.total_sectors_long){
+        std::cout<<"Too many hidden sectors"<<std::endl;
+        return 0;
+    }
+    if(bs.number_of_fats > 100){
+        std::cout<<"Too many hidden sectors"<<std::endl;
         return 0;
     }
 
@@ -108,6 +116,45 @@ int main(int argc, char* argv[]) {
         std::cout<<"Valid FAT32 backup boot sector found"<<std::endl;
         fclose(f);
         return 0;
+    }
+    long fat_start = bs.reserved_sectors*bs.sector_size;
+    //validate that each entry in table is valid and there are no lost clusters(clusters chains that don't belong to files)
+    long data_start = fat_start + bs.number_of_fats*bs.fat_size_sectors*bs.sector_size;
+    char* old_table;
+    for(int k = 0; k < bs.number_of_fats; k+= 1){
+        char* table = (char*)malloc(bs.fat_size_sectors*bs.sector_size);
+        fseek(f, fat_start+k*bs.fat_size_sectors*bs.sector_size, SEEK_SET);
+        fread(table, sizeof(table), 1, f);
+        for(unsigned long long i = 0;i<sizeof(table)/4;i++){
+            unsigned long entry = (unsigned char)*(table + i*4);
+            //check if entry is invalid/suspicious
+            if(entry == 0xFFFFF6 || entry == 0xFFFFF0){
+                return -1;
+            }
+            //check lost clusters
+            unsigned long next_entry = (unsigned char)*(table + entry*4);
+            while(next_entry != 0xFFFF0F){
+                entry = next_entry;
+                long cluster_start = data_start + bs.sectors_per_cluster*bs.sector_size*entry;
+                char* cluster_data = (char*)malloc(bs.sectors_per_cluster*bs.sector_size);
+                fseek(f,cluster_start,SEEK_SET);
+                fread(cluster_data,sizeof(cluster_data),1,f);
+                next_entry = (unsigned char)*(table + entry*4);
+                bool has_data = false;
+                for(long j = 0; j< bs.sectors_per_cluster*bs.sector_size;j++){
+                    if((*cluster_data + j) != 0){
+                        has_data = true;
+                        break;
+                    }
+                }
+                if(!has_data){
+                    free(cluster_data);
+                    return -1;
+                }
+                free(cluster_data);
+            }
+        }
+        free(table);
     }
 
     std::cout<<"FAT32 not found, checking if FAT32 partition exists..."<<std::endl;

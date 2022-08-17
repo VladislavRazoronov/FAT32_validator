@@ -485,3 +485,5 @@ MigrationBackup/
 
 # Large testing file
 test_hex.txt
+test.img
+test_invalid.img
