@@ -1,5 +1,5 @@
-#ifndef MYCAT_CONFIG_FILE_H
-#define MYCAT_CONFIG_FILE_H
+#ifndef CONFIG_FILE_H
+#define CONFIG_FILE_H
 
 #include <boost/program_options.hpp>
 #include <string>
@@ -38,5 +38,5 @@ private:
             "Config File Options:\n\tmycat [-h|--help] [-A_flag] <file1> <file2> ... <fileN>\n"};
 };
 
-#endif //MYCAT_CONFIG_FILE_H
+#endif //CONFIG_FILE_H
 

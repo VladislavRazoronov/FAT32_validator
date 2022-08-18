@@ -19,7 +19,7 @@ set(CMAKE_CXX_STANDARD 23)
 #  but sometimes it creates too much trouble, so default is OFF.
 set(WARNINGS_AS_ERRORS OFF)
 
-#! Always use PVS Studio while developing. 
+#! Always use PVS Studio while developing.
 set(ENABLE_PVS_STUDIO OFF)
 
 #! Select appropriate sanitizers.
