@@ -487,3 +487,4 @@ MigrationBackup/
 test_hex.txt
 test.img
 test_invalid.img
+compiled_boost/
